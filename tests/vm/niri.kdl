@@ -1,0 +1,3 @@
+// The least niri config that uses everyscreen. optional=true, so niri still
+// starts where the file is missing.
+include optional=true "screen-layout.kdl"
