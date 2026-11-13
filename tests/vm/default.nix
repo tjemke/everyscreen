@@ -14,7 +14,7 @@
 # the compositor packages it names. The layout is always ./layout.nix.
 #
 # It refuses to run outside Nix's build sandbox (./lib.py). Without KVM, QEMU
-# emulates the CPU: about 8 minutes on a fast desktop, an hour on a slow one.
+# emulates the CPU: about 5½ minutes on a fast desktop, an hour on a slow one.
 {
   pkgs,
   # Home Manager's NixOS module.

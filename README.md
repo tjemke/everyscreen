@@ -140,10 +140,10 @@ that each lays them out as [`tests/vm/layout.nix`](tests/vm/layout.nix) says.
 It also checks each one with the TV unplugged and plugged back, and without
 everyscreen's file, to show the layout really comes from it. It needs Nix's
 build sandbox (`sandbox = true`, the default on Linux) and refuses to run
-without it. Without KVM, QEMU emulates the CPU: the test then took about 8
-minutes on a fast desktop CPU, and close to an hour on a slower machine. KVM
-makes it faster. Compiling the patched niri the test uses adds a few minutes
-the first time.
+without it. With KVM the test script should take about 2 minutes. Without KVM,
+QEMU emulates the CPU: about 5½ minutes on a fast desktop CPU, and close to an
+hour on a slower machine. Compiling the patched niri the test uses adds a few
+minutes the first time.
 
 One known failure is tolerated: Hyprland 0.55 on vkms never brings the TV back
 after a replug. The kernel shows it connected again and the other three

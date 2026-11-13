@@ -209,14 +209,19 @@ How it works, and why each piece is there:
 - **No fixed sleeps:** each check polls the layout every 2 s until it is the
   expected one (`check_geometry`) or has settled (`check_control`), with a
   timeout. Under emulation a layout can take long to apply; with KVM a fixed
-  sleep would be most of the run.
+  sleep would be most of the run. A check listed in `KNOWN` waits only 30 s
+  (`KNOWN_TIMEOUT`): it is expected to fail, so it would wait out the full
+  180 s every run. The other compositors bring the TV back within 11 s of a
+  replug, with or without KVM.
 - **Speed:** without KVM, QEMU emulates the CPU in software and every
   compositor renders with llvmpipe on top of that. On a Ryzen 9 7900X,
-  emulated, the test script took 457 s. The earlier version, with fixed
-  sleeps and 13 fewer checks, took 592 s there. An earlier, slower host took
-  close to an hour. KVM hasn't been measured. Compiling the patched niri the
-  first time adds minutes. The test's timeouts are wall-clock, so if the host
-  sleeps mid-run, a check can fail that would otherwise pass. [vm]
+  emulated, the test script takes 324 s. Before `KNOWN_TIMEOUT` it took
+  457 s, and the version with fixed sleeps and 13 fewer checks took 592 s.
+  With KVM, in the sandbox, it took 264 s before `KNOWN_TIMEOUT`, about 180 s
+  of which was the known failure's wait; that has not been measured since. An
+  earlier, slower host took close to an hour emulated. Compiling the patched
+  niri the first time adds minutes. The test's timeouts are wall-clock, so if
+  the host sleeps mid-run, a check can fail that would otherwise pass. [vm]
 - **It runs only in Nix's build sandbox.** The driver runs the test script
   and QEMU on the build host. In the sandbox they see only the build's inputs.
   Outside it, they would see the host's filesystem and network. The script

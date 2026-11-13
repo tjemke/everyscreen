@@ -104,7 +104,11 @@ def poll(done, timeout):
 
 
 def check_geometry(session, expect, timeout=180):
-    """Wait for exactly this layout, then record a check per output."""
+    """Wait for exactly this layout, then record a check per output. A check
+    in KNOWN would wait out the whole timeout every run, so it gets
+    KNOWN_TIMEOUT instead."""
+    if any(f"{session}: {name} logical geometry" in KNOWN for name in expect):
+        timeout = KNOWN_TIMEOUT
     got = poll(lambda g: g == expect, timeout)
     for name, want in expect.items():
         check(f"{session}: {name} logical geometry", got.get(name) == want, f"want {want}, got {got.get(name)}")
@@ -137,6 +141,10 @@ KNOWN = {
     # back. Not confirmed on real hardware.
     "Hyprland, TV plugged back: HDMI-A-1 logical geometry",
 }
+# How long a check in KNOWN waits. The other compositors bring the TV back
+# within 11 s of the replug, with KVM or without, so a fix still shows up as
+# "now passes" in summary().
+KNOWN_TIMEOUT = 30
 
 
 def summary():
