@@ -16,6 +16,11 @@
 #
 # The user supplies the data; this module only knows the formats.
 #
+# Each compositor has to be at least the oldest release that reads its file as
+# written here, which an assertion checks against `<session>.package`: KWin
+# 6.0, Mutter 50, niri 26.04 and Hyprland 0.55.0. The reasons are in
+# `sessions` below.
+#
 # Things the formats force on the data, checked against KWin 6.6, Mutter 50,
 # niri 26.04 and Hyprland 0.55 sources:
 #
@@ -42,20 +47,84 @@
   config,
   lib,
   osConfig,
+  pkgs,
   ...
 }: let
   inherit (lib) mkOption types;
   cfg = config.programs.everyscreen;
 
+  # Each session, with the oldest release of its compositor that reads the
+  # file as written here, and why nothing older does. Read in each one's
+  # source; only the versions in the header above ran in the VM test.
+  # Plasma and GNOME have no package option in NixOS and take KWin and Mutter
+  # from pkgs, which with Home Manager as a NixOS module is the same nixpkgs.
+  sessions = {
+    gnome = {
+      name = "Mutter";
+      file = "monitors.xml";
+      enablePath = ["services" "desktopManager" "gnome" "enable"];
+      package = pkgs.mutter;
+      packageText = "pkgs.mutter";
+      minimum = "50";
+      why = ''
+        before 50, Mutter lays monitors out physically unless the
+        experimental scale-monitor-framebuffer feature is on, and leaves a
+        configuration marked <layoutmode>logical</layoutmode> unused
+        (meta-monitor-manager-native.c, meta-monitor-config-store.c)'';
+    };
+    hyprland = {
+      name = "Hyprland";
+      file = "hypr/screen-layout.lua";
+      enablePath = ["programs" "hyprland" "enable"];
+      package = osConfig.programs.hyprland.package or pkgs.hyprland;
+      packageText = "osConfig.programs.hyprland.package or pkgs.hyprland";
+      minimum = "0.55.0";
+      why = "Hyprland reads a Lua config, and so hl.monitor(), from 0.55.0 on";
+    };
+    niri = {
+      name = "niri";
+      file = "niri/screen-layout.kdl";
+      enablePath = ["programs" "niri" "enable"];
+      package = osConfig.programs.niri.package or pkgs.niri;
+      packageText = "osConfig.programs.niri.package or pkgs.niri";
+      minimum = "26.04";
+      why = ''
+        the config.kdl that pulls the layout in needs `include optional=true`,
+        which niri has from 26.04 on'';
+    };
+    plasma = {
+      name = "KWin";
+      file = "kwinoutputconfig.json";
+      enablePath = ["services" "desktopManager" "plasma6" "enable"];
+      package = pkgs.kdePackages.kwin;
+      packageText = "pkgs.kdePackages.kwin";
+      minimum = "6.0";
+      why = "KWin reads kwinoutputconfig.json from Plasma 6.0 on; before, KScreen kept layouts in files of its own";
+    };
+  };
+
   # osConfig is null when Home Manager runs on its own
-  # (modules/misc/submodule-support.nix), and attrByPath takes that.
-  session = name: path:
-    mkOption {
-      default = lib.attrByPath path false osConfig;
-      defaultText = lib.literalExpression "osConfig.${lib.concatStringsSep "." path} or false";
-      description = "Whether to write the layout for ${name}.";
+  # (modules/misc/submodule-support.nix); attrByPath and `or` both take that.
+  sessionOptions = s: {
+    enable = mkOption {
+      default = lib.attrByPath s.enablePath false osConfig;
+      defaultText = lib.literalExpression "osConfig.${lib.concatStringsSep "." s.enablePath} or false";
+      description = "Whether to write the layout for ${s.name} (~/.config/${s.file}).";
       type = types.bool;
     };
+    package = mkOption {
+      default = s.package;
+      defaultText = lib.literalExpression s.packageText;
+      description = ''
+        The ${s.name} that reads the layout. Only its version is used: it has
+        to be ${s.minimum} or newer, the oldest that reads the file as
+        everyscreen writes it. Nothing is installed. With standalone Home
+        Manager the default is a guess at the ${s.name} your system runs; set
+        `null` to skip the check.
+      '';
+      type = types.nullOr types.package;
+    };
+  };
 
   output = types.submodule {
     options = {
@@ -311,24 +380,21 @@
     '') (builtins.attrValues cfg.outputs)}
   '';
 in {
-  options.programs.everyscreen = {
-    gnome.enable = session "GNOME (~/.config/monitors.xml)" ["services" "desktopManager" "gnome" "enable"];
-    hyprland.enable = session "Hyprland (~/.config/hypr/screen-layout.lua)" ["programs" "hyprland" "enable"];
-    niri.enable = session "niri (~/.config/niri/screen-layout.kdl)" ["programs" "niri" "enable"];
-    plasma.enable = session "Plasma (~/.config/kwinoutputconfig.json)" ["services" "desktopManager" "plasma6" "enable"];
-
-    outputs = mkOption {
-      default = {};
-      description = "Every monitor you have, by a name of your choosing.";
-      type = types.attrsOf output;
+  options.programs.everyscreen =
+    lib.mapAttrs (_: sessionOptions) sessions
+    // {
+      outputs = mkOption {
+        default = {};
+        description = "Every monitor you have, by a name of your choosing.";
+        type = types.attrsOf output;
+      };
+      setups = mkOption {
+        default = [];
+        description = "The sets of outputs that are connected together; KWin and GNOME get one layout for each.";
+        example = [["left" "center"] ["left" "center" "tv"]];
+        type = types.listOf (types.listOf (types.enum names));
+      };
     };
-    setups = mkOption {
-      default = [];
-      description = "The sets of outputs that are connected together; KWin and GNOME get one layout for each.";
-      example = [["left" "center"] ["left" "center" "tv"]];
-      type = types.listOf (types.listOf (types.enum names));
-    };
-  };
 
   config = lib.mkIf (cfg.outputs != {}) {
     assertions =
@@ -336,7 +402,18 @@ in {
         assertion = lib.count (o: o.primary) (outputsOf setup) == 1;
         message = "programs.everyscreen: setup [${toString setup}] needs exactly one primary output; Mutter refuses it otherwise.";
       })
-      cfg.setups;
+      cfg.setups
+      ++ lib.mapAttrsToList (key: s: let
+        c = cfg.${key};
+        version = lib.getVersion c.package;
+      in {
+        assertion = !c.enable || c.package == null || !lib.versionOlder version s.minimum;
+        message = ''
+          programs.everyscreen: ${s.name} ${version} is too old for ~/.config/${s.file}; it needs ${s.minimum} or newer:
+          ${s.why}.
+          Update ${s.name}, or set programs.everyscreen.${key}.package = null to skip this check.'';
+      })
+      sessions;
 
     warnings = lib.optional (cfg.gnome.enable && gnomeSetups != cfg.setups) ''
       programs.everyscreen: outputs ${toString (builtins.filter (n: cfg.outputs.${n}.gnome == null) names)} have no

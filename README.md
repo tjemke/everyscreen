@@ -17,6 +17,13 @@ everyscreen writes each compositor's own file instead.
 Checked against KWin 6.6, Mutter 50, niri 26.04 and Hyprland 0.55 (the Lua
 config; the older `hyprland.conf` syntax is not written).
 
+Needs at least KWin 6.0, Mutter 50, niri 26.04 and Hyprland 0.55.0, the oldest
+releases that read the files as written. An assertion checks this against
+`programs.everyscreen.<session>.package`. That option is only read for its
+version and installs nothing. By default it is the system's niri or Hyprland
+package, and KWin or Mutter from `pkgs`. With standalone Home Manager, point it
+at what your system runs, or set it to `null` to skip the check.
+
 ## Use
 
 ```nix

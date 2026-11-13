@@ -27,6 +27,21 @@ nixos-26.05 (`7dcdd873`), and Linux 7.3.1 for the test.
 | niri     | `~/.config/niri/screen-layout.kdl` | user's `config.kdl`: `include optional=true`  |
 | Hyprland | `~/.config/hypr/screen-layout.lua` | user's `hyprland.lua`: `pcall(require, …)`    |
 
+## Minimum versions
+
+The module asserts each compositor is at least the oldest release that reads
+its file as written. Only the versions above ran in the VM test; the minimums
+come from reading each older release's source. When you change what the module
+writes, check that the minimum still holds, and raise it in `sessions` in
+`module.nix` if it doesn't.
+
+| Compositor | Minimum | Why nothing older works                                                                 |
+|------------|---------|-----------------------------------------------------------------------------------------|
+| KWin       | 6.0     | The file first appeared in 6.0 (`ae84480f`); before, KScreen kept its own files. 6.0 already reads every key the module writes, matches on a unique `edidIdentifier`, uses the same transform names, and sorts by `priority`. [src] |
+| Mutter     | 50      | Before 50, the native backend only uses the logical layout mode with the experimental `scale-monitor-framebuffer` feature (`meta-monitor-manager-native.c`). Otherwise it leaves configurations marked `<layoutmode>logical</layoutmode>` unused (47, `076b3664`). `<colormode>` also needs 48. [src] |
+| niri       | 26.04   | `include optional=true` arrived in 26.04 (`7a237e5`); `include` itself in 25.11. [src] |
+| Hyprland   | 0.55.0  | 0.55.0 is the first release with the Lua config and `hl.monitor` (`5ba33f84`). The `hyprland.conf` syntax was removed in 0.56 (`a9902ea6`). [src] |
+
 ## Compositor facts
 
 ### KWin (`kwinoutputconfig.json`)
@@ -134,6 +149,14 @@ nixos-26.05 (`7dcdd873`), and Linux 7.3.1 for the test.
   `programs.{niri,hyprland}.enable`. Standalone, all default to off.
 - The Plasma and GNOME files use `force = true`, because Mutter can turn the
   link into a plain file (see above).
+- The version check reads `programs.everyscreen.<session>.package`. It is
+  never installed. For niri and Hyprland it defaults to
+  `osConfig.programs.{niri,hyprland}.package` and falls back to `pkgs`. NixOS
+  has no package option for Plasma or GNOME, whose modules take
+  `pkgs.kdePackages.kwin` and `pkgs.mutter` directly, so the default is Home
+  Manager's `pkgs`. As a NixOS module, that is the same nixpkgs. Standalone,
+  it is only a guess; `null` skips the check. [vm: evaluated with versions
+  just below each minimum, at the minimums, and with `null`]
 
 ## The VM test (`nix build .#checks.x86_64-linux.vm -L`)
 
