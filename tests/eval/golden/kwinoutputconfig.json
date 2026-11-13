@@ -1,0 +1,107 @@
+[
+  {
+    "data": [
+      {
+        "connectorName": "DP-1",
+        "edidIdentifier": "EXA 4098 16843009 20 2019 0",
+        "highDynamicRange": false,
+        "mode": {
+          "height": 1080,
+          "refreshRate": 60000,
+          "width": 1920
+        },
+        "scale": 1,
+        "transform": "Normal",
+        "wideColorGamut": false
+      },
+      {
+        "connectorName": "DP-2",
+        "edidIdentifier": "EXA 4097 16843009 10 2019 0",
+        "highDynamicRange": false,
+        "mode": {
+          "height": 1080,
+          "refreshRate": 60000,
+          "width": 1920
+        },
+        "scale": 1,
+        "transform": "Rotated90",
+        "wideColorGamut": false
+      },
+      {
+        "colorPowerTradeoff": "PreferAccuracy",
+        "connectorName": "HDMI-A-1",
+        "edidIdentifier": "EXT 8193 16843009 0 2020 0",
+        "highDynamicRange": true,
+        "maxPeakBrightnessOverride": 550,
+        "mode": {
+          "height": 2160,
+          "refreshRate": 60000,
+          "width": 3840
+        },
+        "scale": 1.5,
+        "sdrBrightness": 250,
+        "transform": "Normal",
+        "wideColorGamut": true
+      }
+    ],
+    "name": "outputs"
+  },
+  {
+    "data": [
+      {
+        "outputs": [
+          {
+            "enabled": true,
+            "outputIndex": 0,
+            "position": {
+              "x": 1080,
+              "y": 412
+            },
+            "priority": 1
+          },
+          {
+            "enabled": true,
+            "outputIndex": 1,
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "priority": 2
+          }
+        ]
+      },
+      {
+        "outputs": [
+          {
+            "enabled": true,
+            "outputIndex": 0,
+            "position": {
+              "x": 1080,
+              "y": 412
+            },
+            "priority": 1
+          },
+          {
+            "enabled": true,
+            "outputIndex": 1,
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "priority": 2
+          },
+          {
+            "enabled": true,
+            "outputIndex": 2,
+            "position": {
+              "x": 3000,
+              "y": 300
+            },
+            "priority": 3
+          }
+        ]
+      }
+    ],
+    "name": "setups"
+  }
+]

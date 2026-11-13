@@ -1,0 +1,127 @@
+<monitors version="2">
+<configuration>
+  <layoutmode>logical</layoutmode>
+  <logicalmonitor>
+  <x>0</x>
+  <y>0</y>
+  <scale>1</scale>
+  <primary>no</primary>
+  <transform>
+    <rotation>left</rotation>
+    <flipped>no</flipped>
+  </transform>
+  <monitor>
+    <monitorspec>
+      <connector>DP-2</connector>
+      <vendor>EXA</vendor>
+      <product>Example 22</product>
+      <serial>EX22A0000001</serial>
+    </monitorspec>
+    <mode>
+      <width>1920</width>
+      <height>1080</height>
+      <rate>60.000</rate>
+    </mode>
+  </monitor>
+</logicalmonitor>
+<logicalmonitor>
+  <x>1080</x>
+  <y>412</y>
+  <scale>1</scale>
+  <primary>yes</primary>
+  <transform>
+    <rotation>normal</rotation>
+    <flipped>no</flipped>
+  </transform>
+  <monitor>
+    <monitorspec>
+      <connector>DP-1</connector>
+      <vendor>EXA</vendor>
+      <product>Example 24</product>
+      <serial>EX24A0000002</serial>
+    </monitorspec>
+    <mode>
+      <width>1920</width>
+      <height>1080</height>
+      <rate>60.000</rate>
+    </mode>
+  </monitor>
+</logicalmonitor>
+
+</configuration>
+<configuration>
+  <layoutmode>logical</layoutmode>
+  <logicalmonitor>
+  <x>0</x>
+  <y>0</y>
+  <scale>1</scale>
+  <primary>no</primary>
+  <transform>
+    <rotation>left</rotation>
+    <flipped>no</flipped>
+  </transform>
+  <monitor>
+    <monitorspec>
+      <connector>DP-2</connector>
+      <vendor>EXA</vendor>
+      <product>Example 22</product>
+      <serial>EX22A0000001</serial>
+    </monitorspec>
+    <mode>
+      <width>1920</width>
+      <height>1080</height>
+      <rate>60.000</rate>
+    </mode>
+  </monitor>
+</logicalmonitor>
+<logicalmonitor>
+  <x>1080</x>
+  <y>412</y>
+  <scale>1</scale>
+  <primary>yes</primary>
+  <transform>
+    <rotation>normal</rotation>
+    <flipped>no</flipped>
+  </transform>
+  <monitor>
+    <monitorspec>
+      <connector>DP-1</connector>
+      <vendor>EXA</vendor>
+      <product>Example 24</product>
+      <serial>EX24A0000002</serial>
+    </monitorspec>
+    <mode>
+      <width>1920</width>
+      <height>1080</height>
+      <rate>60.000</rate>
+    </mode>
+  </monitor>
+</logicalmonitor>
+<logicalmonitor>
+  <x>3000</x>
+  <y>300</y>
+  <scale>1.500000</scale>
+  <primary>no</primary>
+  <transform>
+    <rotation>normal</rotation>
+    <flipped>no</flipped>
+  </transform>
+  <monitor>
+    <monitorspec>
+      <connector>HDMI-1</connector>
+      <vendor>EXT</vendor>
+      <product>Example-TV</product>
+      <serial>0x01010101</serial>
+    </monitorspec>
+    <mode>
+      <width>3840</width>
+      <height>2160</height>
+      <rate>60.000</rate>
+    </mode>
+<colormode>bt2100</colormode>
+  </monitor>
+</logicalmonitor>
+
+</configuration>
+
+</monitors>

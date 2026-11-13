@@ -158,6 +158,23 @@ writes, check that the minimum still holds, and raise it in `sessions` in
   it is only a guess; `null` skips the check. [vm: evaluated with versions
   just below each minimum, at the minimums, and with `null`]
 
+## The quick checks (`nix build .#checks.x86_64-linux.eval -L`)
+
+These need no VM and take seconds. `tests/eval` evaluates the module with
+standalone Home Manager:
+
+- It compares the four generated files with the copies in
+  `tests/eval/golden`. A change to the output shows up as a diff; when the
+  change is intended, update the copies as the file's header says.
+- It checks what the assertions and warnings report for a set of
+  configurations: the minimum versions, `null`, sessions turned off, the
+  primary rule, and outputs without `gnome` strings.
+- It calls `evalModules` the way Home Manager's `modules/default.nix` does,
+  but skips the step that throws on a failed assertion.
+
+The flake ref has to see `tests/eval`. On a checkout where it isn't tracked
+yet, use `path:.` instead of `.`.
+
 ## The VM test (`nix build .#checks.x86_64-linux.vm -L`)
 
 How it works, and why each piece is there:
@@ -184,17 +201,37 @@ How it works, and why each piece is there:
   detail: `kscreen-doctor -j`, `gdctl show`, `niri msg -j outputs`, and
   `hyprctl -j monitors all`. [vm]
 - **Each section has a control:** it moves everyscreen's file away and checks
-  that the layout then differs, which proves the layout came from the file.
+  that the same outputs come up and settle on a different layout, which
+  proves the layout came from the file. Without "the same outputs", a
+  compositor that showed nothing yet would pass. KWin and GNOME are also
+  checked with the TV unplugged, for the two-monitor setup. Hyprland's control
+  runs before its hotplug, because Hyprland doesn't bring the TV back.
+- **No fixed sleeps:** each check polls the layout every 2 s until it is the
+  expected one (`check_geometry`) or has settled (`check_control`), with a
+  timeout. Under emulation a layout can take long to apply; with KVM a fixed
+  sleep would be most of the run.
 - **Speed:** without KVM, QEMU emulates the CPU in software and every
-  compositor renders with llvmpipe on top of that. A full run is then close
-  to an hour. The test's timeouts are wall-clock, so if the host sleeps
-  mid-run, a check can fail that would otherwise pass. [vm]
+  compositor renders with llvmpipe on top of that. On a Ryzen 9 7900X,
+  emulated, the test script took 457 s. The earlier version, with fixed
+  sleeps and 13 fewer checks, took 592 s there. An earlier, slower host took
+  close to an hour. KVM hasn't been measured. Compiling the patched niri the
+  first time adds minutes. The test's timeouts are wall-clock, so if the host
+  sleeps mid-run, a check can fail that would otherwise pass. [vm]
+- **It runs only in Nix's build sandbox.** The driver runs the test script
+  and QEMU on the build host. In the sandbox they see only the build's inputs.
+  Outside it, they would see the host's filesystem and network. The script
+  refuses to start if `/nix/var/nix` exists, which is never mounted into the
+  sandbox. (The driver's own `in_nix_sandbox()` only looks at environment
+  variables.) This also stops `driverInteractive`. [src: Nix sandbox setup;
+  the sandboxed case is not exercised, since builds here run without one]
 - **HDR is untestable here:** vkms exposes no HDR properties. [vm]
 - `skipLint = true`: the test-script linter rejects an import that the
   section files use. [vm]
 
 Results at the versions above: Plasma, GNOME and niri pass every check;
-Hyprland passes everything except the known replug failure.
+Hyprland passes everything except the known replug failure (105 passed, 1
+known failure). Before the stricter controls, Hyprland's control "passed"
+with only two outputs up, because the TV never came back after the replug.
 
 ## Pitfalls hit while building it
 

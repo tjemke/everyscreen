@@ -1,4 +1,5 @@
-TWO = {k: v for k, v in EXPECT.items() if k != "HDMI-A-1"}
+# One function per session, plus the smoke test. ./default.nix sets SESSIONS
+# to the sessions under test before this file.
 
 
 def section(fn):
@@ -6,9 +7,21 @@ def section(fn):
         fn()
     except Exception as e:  # keep going: one compositor must not hide the others
         check(f"{fn.__name__} ran to the end", False, repr(e)[:300])
-        machine.execute("systemctl stop 'sess-*'; loginctl terminate-user alice")
-        machine.sleep(5)
+        machine.execute("systemctl stop 'sess-*'")
+        machine.execute("systemctl reset-failed 'sess-*'")
+        try:
+            logged_out()
+        except Exception as e2:
+            print(f"alice did not log out cleanly: {e2!r}")
     plug(True)
+
+
+FILES = {
+    "plasma": ["kwinoutputconfig.json"],
+    "gnome": ["monitors.xml"],
+    "niri": ["niri/screen-layout.kdl", "niri/config.kdl"],
+    "hyprland": ["hypr/screen-layout.lua", "hypr/hyprland.lua"],
+}
 
 
 def smoke():
@@ -16,16 +29,16 @@ def smoke():
         st = machine.succeed(f"cat /sys/class/drm/card*-{conn}/status").strip()
         name = machine.succeed(f"edid-decode /sys/class/drm/card*-{conn}/edid | grep 'Display Product Name'").strip()
         check(f"vkms: {conn} connected with the {model} EDID", st == "connected" and model in name, f"{st}; {name}")
-    for f in ["kwinoutputconfig.json", "monitors.xml", "niri/screen-layout.kdl", "niri/config.kdl", "hypr/screen-layout.lua", "hypr/hyprland.lua"]:
+    for f in [f for s in SESSIONS for f in FILES[s]]:
         rc, _ = machine.execute(f"test -e /home/alice/.config/{f}")
         check(f"home-manager wrote ~/.config/{f}", rc == 0)
 
 
 def kde():
     cfg = "/home/alice/.config/kwinoutputconfig.json"
+    up = "test -S /run/user/1000/wayland-0"
     start_session("kwin", "kwin_wayland --drm --no-lockscreen")
-    machine.wait_until_succeeds("test -S /run/user/1000/wayland-0", timeout=900)
-    machine.sleep(20)
+    wait_up("kwin", up)
     check_geometry("KDE, TV on", EXPECT)
 
     raw = as_user("WAYLAND_DISPLAY=wayland-0 kscreen-doctor -j")
@@ -41,10 +54,8 @@ def kde():
         check(f"KDE: {name} mode @60", abs(mode.get("refreshRate", 0) - 60) < 0.01, str(mode))
 
     plug(False)
-    machine.sleep(20)
     check_geometry("KDE, TV unplugged (setup 1)", TWO)
     plug(True)
-    machine.sleep(20)
     check_geometry("KDE, TV plugged back (setup 2)", EXPECT)
 
     print(machine.execute(f"ls -l {cfg}; journalctl -u sess-kwin --no-pager | grep -i -E 'output|config|kwinoutput' | tail -30")[1])
@@ -52,21 +63,23 @@ def kde():
     rc, _ = machine.execute(f"test -L {cfg}")
     check("KDE: kwinoutputconfig.json is still the store link after the session", rc == 0)
 
-    # Control: without the file, KWin must lay the outputs out differently.
+    # Controls: without the file, KWin must lay out both sets differently.
+    # KWin saves a file of its own meanwhile, which goes before the link
+    # comes back.
     machine.succeed(f"mv {cfg} {cfg}.off")
     start_session("kwin", "kwin_wayland --drm --no-lockscreen")
-    machine.wait_until_succeeds("test -S /run/user/1000/wayland-0", timeout=900)
-    machine.sleep(20)
-    got = logical_outputs()
-    check("KDE control: without the file the layout differs", got != EXPECT, str(got))
+    wait_up("kwin", up)
+    check_control("KDE control", EXPECT)
+    plug(False)
+    check_control("KDE control, TV unplugged", TWO)
+    plug(True)
     stop_session("kwin")
     machine.succeed(f"rm -f {cfg}; mv {cfg}.off {cfg}")
 
 
 def hyprland():
     start_session("hypr", "Hyprland")
-    machine.wait_until_succeeds("ls /run/user/1000/hypr/*/.socket.sock", timeout=900)
-    machine.sleep(15)
+    wait_up("hypr", "ls /run/user/1000/hypr/*/.socket.sock")
     hc = "hyprctl --instance 0"
     check_geometry("Hyprland, TV on", EXPECT)
     raw = as_user(f"{hc} -j monitors all")
@@ -85,28 +98,28 @@ def hyprland():
     check("Hyprland: no scale or monitor-rule complaints in the log", not bad, " | ".join(bad)[:300])
     print("\n".join(l for l in log.splitlines() if re.search(r"(?i)hdr|cm |colou?r|10.?bit", l))[:3000])
 
-    plug(False)
-    machine.sleep(15)
-    check_geometry("Hyprland, TV unplugged", TWO)
-    plug(True)
-    machine.sleep(15)
-    check_geometry("Hyprland, TV plugged back", EXPECT)
-
-    # Control: move the generated file away and reload.
+    # Control before the hotplug: Hyprland does not bring the TV back after a
+    # replug (KNOWN), and the control needs all three outputs. Reloading with
+    # the file back has to restore the layout.
     lua = "/home/alice/.config/hypr/screen-layout.lua"
     machine.succeed(f"mv {lua} {lua}.off")
     as_user(f"{hc} reload")
-    machine.sleep(15)
-    got = logical_outputs()
-    check("Hyprland control: without the file the layout differs", got != EXPECT, str(got))
+    check_control("Hyprland control", EXPECT)
     machine.succeed(f"mv {lua}.off {lua}")
+    as_user(f"{hc} reload")
+    check_geometry("Hyprland, file back after reload", EXPECT)
+
+    plug(False)
+    check_geometry("Hyprland, TV unplugged", TWO)
+    plug(True)
+    check_geometry("Hyprland, TV plugged back", EXPECT)
     stop_session("hypr")
 
 
 def niri():
+    up = "ls /run/user/1000/niri.*.sock"
     start_session("niri", "niri")
-    wait_up("niri", "ls /run/user/1000/niri.*.sock")
-    machine.sleep(10)
+    wait_up("niri", up)
     msg = "NIRI_SOCKET=$(ls /run/user/1000/niri.*.sock | head -1) niri msg"
     check_geometry("niri, TV on", EXPECT)
     raw = as_user(f"{msg} -j outputs")
@@ -128,20 +141,28 @@ def niri():
     check("niri: no config or mode errors in the log", not bad, " | ".join(bad)[:300])
 
     plug(False)
-    machine.sleep(10)
     check_geometry("niri, TV unplugged", TWO)
     plug(True)
-    machine.sleep(10)
     check_geometry("niri, TV plugged back", EXPECT)
     stop_session("niri")
+
+    # Control: without the file niri has to start (include optional=true) and
+    # place the outputs its own way.
+    kdl = "/home/alice/.config/niri/screen-layout.kdl"
+    machine.succeed(f"mv {kdl} {kdl}.off")
+    start_session("niri", "niri")
+    wait_up("niri", up)
+    check_control("niri control", EXPECT)
+    stop_session("niri")
+    machine.succeed(f"mv {kdl}.off {kdl}")
 
 
 def gnome():
     xml = "/home/alice/.config/monitors.xml"
+    up = "test -S /run/user/1000/wayland-0"
     M3 = {("HDMI-1" if k == "HDMI-A-1" else k): v for k, v in EXPECT.items()}
     start_session("mutter", "gnome-shell --wayland --display-server --no-x11")
-    wait_up("mutter", "test -S /run/user/1000/wayland-0")
-    machine.sleep(20)
+    wait_up("mutter", up)
     check_geometry("GNOME, TV on", M3)
     raw = as_user("gdctl show --verbose", check_rc=False)
     print(raw)
@@ -151,18 +172,21 @@ def gnome():
     check("GNOME: Mutter accepted the stored configuration", not bad, " | ".join(bad)[:300])
 
     plug(False)
-    machine.sleep(20)
     check_geometry("GNOME, TV unplugged (setup 1)", TWO)
     plug(True)
-    machine.sleep(20)
     check_geometry("GNOME, TV plugged back (setup 2)", M3)
     stop_session("mutter")
 
+    # Controls: without the file, Mutter must lay out both sets differently.
     machine.succeed(f"mv {xml} {xml}.off")
     start_session("mutter", "gnome-shell --wayland --display-server --no-x11")
-    wait_up("mutter", "test -S /run/user/1000/wayland-0")
-    machine.sleep(20)
-    got = logical_outputs()
-    check("GNOME control: without the file the layout differs", got != M3, str(got))
+    wait_up("mutter", up)
+    check_control("GNOME control", M3)
+    plug(False)
+    check_control("GNOME control, TV unplugged", TWO)
+    plug(True)
     stop_session("mutter")
     machine.succeed(f"rm -f {xml}; mv {xml}.off {xml}")
+
+
+SECTIONS = {"plasma": kde, "hyprland": hyprland, "niri": niri, "gnome": gnome}

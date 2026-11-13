@@ -126,16 +126,24 @@ The formats limit the data in a few ways, and the module enforces what it can:
 ## Test
 
 ```
-nix build .#checks.x86_64-linux.vm -L
+nix build .#checks.x86_64-linux.eval -L   # seconds, no VM
+nix build .#checks.x86_64-linux.vm -L     # the VM test
 ```
 
-Boots a VM with three virtual monitors carrying real EDIDs (a patched vkms),
-starts Plasma, GNOME, Hyprland and niri in turn, and checks that each lays
-them out as [`tests/vm/layout.nix`](tests/vm/layout.nix) says. It also checks
-each one with the TV unplugged and plugged back, and without everyscreen's file
-to show the layout really comes from it. Without KVM, under plain emulation,
-each session took several minutes and a full run is closer to an hour; KVM
-makes it much faster.
+The first compares the four generated files with
+[`tests/eval/golden`](tests/eval/golden), and checks what the assertions and
+warnings report for a set of configurations.
+
+The second boots a VM with three virtual monitors carrying real EDIDs (a
+patched vkms). It starts Plasma, GNOME, Hyprland and niri in turn, and checks
+that each lays them out as [`tests/vm/layout.nix`](tests/vm/layout.nix) says.
+It also checks each one with the TV unplugged and plugged back, and without
+everyscreen's file, to show the layout really comes from it. It needs Nix's
+build sandbox (`sandbox = true`, the default on Linux) and refuses to run
+without it. Without KVM, QEMU emulates the CPU: the test then took about 8
+minutes on a fast desktop CPU, and close to an hour on a slower machine. KVM
+makes it faster. Compiling the patched niri the test uses adds a few minutes
+the first time.
 
 One known failure is tolerated: Hyprland 0.55 on vkms never brings the TV back
 after a replug. The kernel shows it connected again and the other three

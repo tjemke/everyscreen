@@ -1,10 +1,23 @@
 # Shared helpers, prepended to every script.
 import json
+import os
 import re
 import shlex
+import time
+
+# The driver runs this script on the build host, next to QEMU. In Nix's build
+# sandbox it sees only its inputs from the store, never /nix/var/nix; outside
+# the sandbox it, QEMU and the VM's disk image would have the host's whole
+# filesystem and network. Refuse rather than run there.
+if os.path.exists("/nix/var/nix"):
+    raise Exception(
+        "everyscreen's VM test runs only inside Nix's build sandbox, and this build can see the host "
+        "(/nix/var/nix exists). Enable `sandbox = true` in nix.conf."
+    )
 
 USER_ENV = "XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
 CONN = "/sys/kernel/config/vkms/desk/connectors"
+POLL = 2  # seconds between looks at the layout
 
 # What ./layout.nix prescribes, in logical pixels:
 # left is 1920x1080 rotated, the TV 3840x2160 at scale 1.5.
@@ -13,6 +26,7 @@ EXPECT = {
     "DP-1": (1080, 412, 1920, 1080),
     "HDMI-A-1": (3000, 300, 2560, 1440),
 }
+TWO = {k: v for k, v in EXPECT.items() if k != "HDMI-A-1"}
 results = []
 
 
@@ -38,12 +52,18 @@ def start_session(name, cmd):
     )
 
 
+def logged_out():
+    """End alice's sessions and wait until nothing of hers is left running.
+    The next session must not find the last one's sockets."""
+    machine.execute("loginctl terminate-user alice")
+    machine.wait_until_succeeds("! pgrep -u alice && ! test -e /run/user/1000", timeout=120)
+
+
 def stop_session(name):
     machine.execute(f"systemctl stop sess-{name}")
     machine.wait_until_succeeds(f"! systemctl is-active sess-{name}", timeout=120)
     machine.execute(f"systemctl reset-failed sess-{name}")
-    machine.execute("loginctl terminate-user alice")
-    machine.sleep(5)
+    logged_out()
 
 
 def plug(tv):
@@ -51,8 +71,14 @@ def plug(tv):
 
 
 def logical_outputs():
-    """name -> (x, y, w, h) from xdg-output, as any Wayland client sees it."""
-    out = as_user("WAYLAND_DISPLAY=wayland-1 wayland-info 2>/dev/null || WAYLAND_DISPLAY=wayland-0 wayland-info")
+    """name -> (x, y, w, h) from xdg-output, as any Wayland client sees it;
+    empty while no compositor answers."""
+    rc, out = machine.execute(
+        "su - alice -c "
+        + shlex.quote(
+            f"export {USER_ENV}; WAYLAND_DISPLAY=wayland-1 wayland-info 2>/dev/null || WAYLAND_DISPLAY=wayland-0 wayland-info"
+        )
+    )
     res = {}
     for m in re.finditer(
         r"name: '([^']+)'.*?logical_x: (-?\d+), logical_y: (-?\d+).*?logical_width: (\d+), logical_height: (\d+)",
@@ -60,31 +86,48 @@ def logical_outputs():
         re.S,
     ):
         res[m.group(1)] = tuple(int(m.group(i)) for i in range(2, 6))
-    if not res:
-        print(out)
     return res
 
 
-def settle(expect, timeout=180):
-    """Wait until the compositor shows exactly these outputs, or give up."""
-    for _ in range(timeout // 10):
-        try:
-            got = logical_outputs()
-        except Exception:
-            got = {}
-        if set(got) == set(expect):
-            return
-        machine.sleep(10)
+def poll(done, timeout):
+    """Look at the layout every POLL seconds until done(layout), or give up
+    after timeout seconds; either way return the last layout seen. Waiting on
+    the layout itself, not a fixed time, keeps a fast run fast and a slow one
+    (no KVM: QEMU emulates the CPU) from reading a layout before it is
+    applied."""
+    end = time.monotonic() + timeout
+    while True:
+        got = logical_outputs()
+        if done(got) or time.monotonic() > end:
+            return got
+        time.sleep(POLL)
 
 
-def check_geometry(session, expect):
-    settle(expect)
-    got = logical_outputs()
+def check_geometry(session, expect, timeout=180):
+    """Wait for exactly this layout, then record a check per output."""
+    got = poll(lambda g: g == expect, timeout)
     for name, want in expect.items():
         check(f"{session}: {name} logical geometry", got.get(name) == want, f"want {want}, got {got.get(name)}")
     extra = set(got) - set(expect)
     check(f"{session}: no unexpected outputs", not extra, f"extra {sorted(extra)}")
     return got
+
+
+def check_control(label, expect, timeout=180):
+    """The control for a check_geometry: with everyscreen's file out of the
+    way, the same outputs have to come up and settle on a different layout.
+    Without the first condition a compositor that showed nothing yet would
+    pass."""
+    seen = []
+
+    def settled(g):
+        seen.append(g)
+        # The same layout three looks in a row, with every output there.
+        return set(g) == set(expect) and len(seen) >= 3 and seen[-1] == seen[-2] == seen[-3]
+
+    got = poll(settled, timeout)
+    check(f"{label}: the same outputs are up", set(got) == set(expect), f"want {sorted(expect)}, got {sorted(got)}")
+    check(f"{label}: without the file the layout differs", set(got) == set(expect) and got != expect, str(got))
 
 
 # Failures tolerated because they look like the compositor's, not everyscreen's.
