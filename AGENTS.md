@@ -224,6 +224,18 @@ How it works, and why each piece is there:
   sandbox. (The driver's own `in_nix_sandbox()` only looks at environment
   variables.) This also stops `driverInteractive`. [src: Nix sandbox setup;
   the sandboxed case is not exercised, since builds here run without one]
+- **Users can run it from their own configuration** with
+  `programs.everyscreen.vmTest.enable`. It goes into `home.checks`, which
+  Home Manager builds with the generation without keeping it in the result. It
+  uses that configuration's nixpkgs and Home Manager (`modulesPath +
+  "/../nixos"`), only its enabled sessions, and any `<session>.package` that
+  differs from nixpkgs' own. KWin and Mutter go in through an overlay, because
+  NixOS has no package option for them. The layout is always the test's.
+  vkms needs a kernel with its configfs, so the configuration's
+  `linuxPackages_latest` has to be recent. "At eval time" would mean import
+  from derivation: evaluation would block on an hour-long build, and some
+  setups forbid it. A build dependency fails the build before anything is
+  activated, which is what matters. [vm: evaluated]
 - **HDR is untestable here:** vkms exposes no HDR properties. [vm]
 - `skipLint = true`: the test-script linter rejects an import that the
   section files use. [vm]

@@ -1,9 +1,10 @@
 {
   description = "One monitor layout, written for KWin, GNOME, niri and Hyprland";
 
-  # Only the checks and the formatter use these; the module itself needs
-  # nothing but Home Manager's own arguments. Point them at your own with
-  # `inputs.everyscreen.inputs.nixpkgs.follows` to avoid fetching them.
+  # Only the checks and the formatter use these; the module itself, and its
+  # `vmTest`, need nothing but Home Manager's own arguments. Point them at
+  # your own with `inputs.everyscreen.inputs.nixpkgs.follows` to avoid
+  # fetching them.
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     home-manager = {

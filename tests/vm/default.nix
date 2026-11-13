@@ -8,9 +8,10 @@
 # the kernel's EDID override. Every compositor renders with llvmpipe, which
 # stock niri refuses (./niri-sw.nix).
 #
-# The flake's check runs it with its own nixpkgs and every session. It can
-# also run with another nixpkgs and Home Manager, only some of the sessions,
-# and other compositor packages. The layout is always ./layout.nix.
+# The flake's check runs it with its own nixpkgs and every session. The
+# module's `vmTest` runs it from a user's configuration, with that
+# configuration's nixpkgs, its Home Manager, only the sessions it enables and
+# the compositor packages it names. The layout is always ./layout.nix.
 #
 # It refuses to run outside Nix's build sandbox (./lib.py). Without KVM, QEMU
 # emulates the CPU: about 8 minutes on a fast desktop, an hour on a slow one.

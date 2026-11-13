@@ -149,3 +149,20 @@ One known failure is tolerated: Hyprland 0.55 on vkms never brings the TV back
 after a replug. The kernel shows it connected again and the other three
 sessions take it back, so it looks like Hyprland's hotplug handling on vkms,
 but that is not confirmed on real hardware.
+
+### From your own configuration
+
+```nix
+programs.everyscreen.vmTest.enable = true;
+```
+
+This runs the VM test whenever your configuration is built, so that a failure
+stops the build before anything is activated. It starts only the sessions you
+enable, with your nixpkgs, your Home Manager and the compositor packages
+everyscreen checks (`programs.everyscreen.<session>.package`). It still lays
+out the test's monitors, not yours: it shows that everyscreen works with the
+versions you run.
+
+It needs a Linux builder with KVM (the `kvm` and `nixos-test` system features)
+and Nix's sandbox. Your `linuxPackages_latest` has to be recent enough for
+vkms's configfs. The result is cached until something it uses changes.

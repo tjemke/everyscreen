@@ -21,6 +21,9 @@
 # 6.0, Mutter 50, niri 26.04 and Hyprland 0.55.0. The reasons are in
 # `sessions` below.
 #
+# `vmTest.enable` makes building the configuration run everyscreen's VM test
+# (./tests/vm), against the sessions and compositor packages it uses.
+#
 # Things the formats force on the data, checked against KWin 6.6, Mutter 50,
 # niri 26.04 and Hyprland 0.55 sources:
 #
@@ -46,6 +49,7 @@
 {
   config,
   lib,
+  modulesPath,
   osConfig,
   pkgs,
   ...
@@ -379,6 +383,24 @@
       hl.monitor({ ${lib.concatStringsSep ", " (lib.mapAttrsToList (k: v: "${k} = ${luaValue v}") fields)} })
     '') (builtins.attrValues cfg.outputs)}
   '';
+  enabledSessions = builtins.filter (s: cfg.${s}.enable) (builtins.attrNames sessions);
+  # The test's own defaults, which it need not be told about. Comparing
+  # derivations compares their output paths.
+  testDefaults = {
+    gnome = pkgs.mutter;
+    hyprland = pkgs.hyprland;
+    niri = pkgs.niri;
+    plasma = pkgs.kdePackages.kwin;
+  };
+  vmTest = import ./tests/vm {
+    inherit pkgs;
+    # The NixOS module of the Home Manager evaluating this one.
+    homeManagerModule = modulesPath + "/../nixos";
+    everyscreen = ./module.nix;
+    sessions = enabledSessions;
+    packages = lib.filterAttrs (s: p: p != null && p != testDefaults.${s}) (lib.genAttrs enabledSessions (s: cfg.${s}.package));
+    inherit (config.home) stateVersion;
+  };
 in {
   options.programs.everyscreen =
     lib.mapAttrs (_: sessionOptions) sessions
@@ -388,6 +410,16 @@ in {
         description = "Every monitor you have, by a name of your choosing.";
         type = types.attrsOf output;
       };
+      vmTest.enable = lib.mkEnableOption ''
+        running everyscreen's VM test (tests/vm in its source) as part of
+        building this configuration, so that a failure stops the build before
+        anything is activated. It starts each enabled session, with the
+        compositor packages above, this configuration's nixpkgs and its Home
+        Manager, and checks a fixed test layout, not yours: it shows that
+        everyscreen works with those versions. It needs a Linux builder with
+        KVM (the `kvm` and `nixos-test` system features) and runs only in
+        Nix's build sandbox. A run takes minutes, and its result is cached
+        until something it uses changes'';
       setups = mkOption {
         default = [];
         description = "The sets of outputs that are connected together; KWin and GNOME get one layout for each.";
@@ -413,7 +445,19 @@ in {
           ${s.why}.
           Update ${s.name}, or set programs.everyscreen.${key}.package = null to skip this check.'';
       })
-      sessions;
+      sessions
+      ++ [
+        {
+          assertion = !cfg.vmTest.enable || pkgs.stdenv.hostPlatform.isLinux;
+          message = "programs.everyscreen.vmTest needs Linux: it boots a NixOS VM.";
+        }
+        {
+          assertion = !cfg.vmTest.enable || enabledSessions != [];
+          message = "programs.everyscreen.vmTest is on, but no session is enabled to test.";
+        }
+      ];
+
+    home.checks = lib.mkIf cfg.vmTest.enable [vmTest];
 
     warnings = lib.optional (cfg.gnome.enable && gnomeSetups != cfg.setups) ''
       programs.everyscreen: outputs ${toString (builtins.filter (n: cfg.outputs.${n}.gnome == null) names)} have no
